@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import datetime as datetime
 import os
 
 path_dir = os.getcwd()
@@ -9,7 +8,7 @@ buy_time = pd.Timestamp('10:00:00').time()
 sell_time = pd.Timestamp('15:00:00').time()
 last_time = pd.Timestamp('16:00:00').time()
 
-months =["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+months =["April"]#["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 ce_strike = []
 pe_strike = []
@@ -19,13 +18,12 @@ buy_sell = []
 
 def _nifty(year, month):
     path_nifty = path_dir + "\\" +str(year) + "\\Monthly Segregated\\" + month + "\\NIFTY.csv"
-    fields_nifty = ['nifty','datetime', 'Open', 'High', 'Low', 'Close','Volume']
+    fields_nifty = ['nifty','date','time', 'Open', 'High', 'Low', 'Close','Volume']
     nifty = pd.read_csv(path_nifty, names=fields_nifty)
-    nifty['datetime'] = pd.to_datetime(nifty['datetime'])
-    nifty['time'] = pd.to_datetime(nifty['datetime']).dt.time
-    nifty['date'] = pd.to_datetime(nifty['datetime']).dt.date
+    nifty['time'] = pd.to_datetime(nifty['time']).dt.time
+    nifty['date'] = pd.to_datetime(nifty['date'], format='%Y%m%d').dt.date
     nifty['mean'] = (nifty["Open"] + nifty["Close"])/2
-    nifty.drop(['nifty','datetime','Volume'], inplace=True, axis=1)
+
     return nifty
 
 def _path_ce_pe(year, month, straddle_point):
@@ -46,12 +44,14 @@ def _ce_pe(path_ce, path_pe):
     pe = pd.read_csv(path_pe, names=head)
     ce['time'] = pd.to_datetime(ce['time']).dt.time
     pe['time'] = pd.to_datetime(pe['time']).dt.time
+    ce['date'] = pd.to_datetime(ce['date']).dt.date
+    pe['date'] = pd.to_datetime(pe['date']).dt.date
     ce["mean"] = (ce["Open"]+ce["Close"])/2
     pe["mean"] = (pe["Open"]+pe["Close"])/2
 
     return ce, pe
 
-def _update_trades(ceprice, peprice, bo):
+def _update_trades(ceprice, peprice, straddle_point, bo):
     ce_strike.append("CE " + str(straddle_point))
     pe_strike.append("PE " + str(straddle_point))
     ce_price.append(ceprice)
@@ -59,45 +59,45 @@ def _update_trades(ceprice, peprice, bo):
     buy_sell.append(bo)
 
 
-for year in range(2014,2021):
+for year in range(2014,2015):
     for month in months:
         
         nifty = _nifty(year,month)
-        tot_mean = tot_n =0
 
-        for ind in range(len(nifty)):
+        nifty["mean"]=nifty["mean"].rolling(45).mean()
 
-            if(last_time>nifty.iloc[ind]['time']): tot_mean = 0; tot_n = 0
+        straddle_point = nifty[["date","mean"]][nifty["time"]==buy_time]
+        straddle_point["mean"] = round(straddle_point["mean"]/100)*100 
 
-            tot_mean = tot_mean + nifty.iloc[ind]['mean']; tot_n = tot_n + 1; last_time = nifty.iloc[ind]['time']
+        for ind, row in straddle_point.iterrows():
 
-            if nifty.iloc[ind]['time'] == buy_time:
+            path_ce, path_pe = _path_ce_pe(2014, "April", int(row["mean"]))
+            ce, pe = _ce_pe(path_ce, path_pe)   
+            if(_path_ce_pe_check(path_ce, path_pe)==False): continue
+            ce, pe = _ce_pe(path_ce, path_pe) 
 
-                straddle_point = round((tot_mean/tot_n)/100)*100
-                path_ce, path_pe = _path_ce_pe(year, month, straddle_point)
-                if(_path_ce_pe_check(path_ce, path_pe)==False): continue
-                ce, pe = _ce_pe(path_ce, path_pe)
-                
-                for i in ce.index:
-                    if ce.iloc[i]['time'] == buy_time: ceprice = ce.iloc[i]["mean"]; break
+            ce=ce[ce["date"]==row["date"]]
+            pe=pe[pe["date"]==row["date"]]
 
-                for i in pe.index:
-                    if pe.iloc[i]['time'] == buy_time: peprice = pe.iloc[i]["mean"]; break
+            if ce.empty or pe.empty: continue
+                        
 
-                _update_trades(ceprice, peprice, 1)
+            ce_buy = ce[ce["time"]==buy_time]
+            pe_buy = pe[pe["time"]==buy_time]
+            ce_sell = ce[ce["time"]==sell_time]
+            pe_sell = pe[pe["time"]==sell_time]
 
-            if nifty.iloc[ind]['time'] == sell_time:
+            if ce_buy.empty or ce_sell.empty or pe_buy.empty or pe_sell.empty: continue
+            
+            _update_trades(float(ce_buy["mean"]), float(pe_buy["mean"]), int(row["mean"]), 1)
 
-                for i in ce.index:
-                    if ce.iloc[i]['time'] == sell_time: ceprice = ce.iloc[i]["mean"]; break
+            _update_trades(float(ce_sell["mean"]), float(pe_sell["mean"]), int(row["mean"]), 0)
+            
 
-                for i in pe.index:
-                    if pe.iloc[i]['time'] == sell_time: peprice = pe.iloc[i]["mean"]; break
-
-                _update_trades(ceprice, peprice, 0)
-                
-                
 trades = pd.DataFrame((zip(ce_strike,ce_price,pe_strike,pe_price,buy_sell)), columns=["CE", "CE_Price", "PE", "PE_Price", "Buy/Sell"])
+print(trades)
+
+
 peenal = 0
 for ind, row in trades.iterrows():
     if row["Buy/Sell"]==0:
@@ -105,6 +105,4 @@ for ind, row in trades.iterrows():
     else:
         peenal -= (row["CE_Price"] + row["PE_Price"])
 print(len(trades))
-print(peenal*50)
-
-print(trades)
+print(peenal)
