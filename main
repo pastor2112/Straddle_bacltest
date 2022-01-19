@@ -8,13 +8,14 @@ buy_time = pd.Timestamp('10:00:00').time()
 sell_time = pd.Timestamp('15:00:00').time()
 last_time = pd.Timestamp('16:00:00').time()
 
-months =["April"]#["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+months =["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 ce_strike = []
 pe_strike = []
-ce_price = []
-pe_price = []
-buy_sell = []
+ce_price  = []
+pe_price  = []
+buy_sell  = []
+date      = []
 
 def _nifty(year, month):
     path_nifty = path_dir + "\\" +str(year) + "\\Monthly Segregated\\" + month + "\\NIFTY.csv"
@@ -51,13 +52,14 @@ def _ce_pe(path_ce, path_pe):
 
     return ce, pe
 
-def _update_trades(ceprice, peprice, straddle_point, bo):
+def _update_trades(d, ceprice, peprice, straddle_point, bo):
+    date.append(d)
     ce_strike.append("CE " + str(straddle_point))
     pe_strike.append("PE " + str(straddle_point))
     ce_price.append(ceprice)
     pe_price.append(peprice)
     buy_sell.append(bo)
-
+    
 
 for year in range(2014,2015):
     for month in months:
@@ -71,8 +73,7 @@ for year in range(2014,2015):
 
         for ind, row in straddle_point.iterrows():
 
-            path_ce, path_pe = _path_ce_pe(2014, "April", int(row["mean"]))
-            ce, pe = _ce_pe(path_ce, path_pe)   
+            path_ce, path_pe = _path_ce_pe(2014, "April", int(row["mean"]))   
             if(_path_ce_pe_check(path_ce, path_pe)==False): continue
             ce, pe = _ce_pe(path_ce, path_pe) 
 
@@ -89,14 +90,13 @@ for year in range(2014,2015):
 
             if ce_buy.empty or ce_sell.empty or pe_buy.empty or pe_sell.empty: continue
             
-            _update_trades(float(ce_buy["mean"]), float(pe_buy["mean"]), int(row["mean"]), 1)
+            _update_trades(str(row["date"]), float(ce_buy["mean"]), float(pe_buy["mean"]), int(row["mean"]), 1)
 
-            _update_trades(float(ce_sell["mean"]), float(pe_sell["mean"]), int(row["mean"]), 0)
+            _update_trades(str(row["date"]), float(ce_sell["mean"]), float(pe_sell["mean"]), int(row["mean"]), 0)
             
 
-trades = pd.DataFrame((zip(ce_strike,ce_price,pe_strike,pe_price,buy_sell)), columns=["CE", "CE_Price", "PE", "PE_Price", "Buy/Sell"])
-print(trades)
-
+trades = pd.DataFrame((zip(date, ce_strike,ce_price,pe_strike,pe_price,buy_sell)), columns=["date", "CE", "CE_Price", "PE", "PE_Price", "Buy/Sell"])
+print(trades.head())
 
 peenal = 0
 for ind, row in trades.iterrows():
@@ -104,5 +104,6 @@ for ind, row in trades.iterrows():
         peenal += (row["CE_Price"] + row["PE_Price"])
     else:
         peenal -= (row["CE_Price"] + row["PE_Price"])
+
 print(len(trades))
 print(peenal)
