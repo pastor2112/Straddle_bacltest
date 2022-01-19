@@ -9,7 +9,7 @@ buy_time = pd.Timestamp('10:00:00').time()
 sell_time = pd.Timestamp('15:00:00').time()
 last_time = pd.Timestamp('16:00:00').time()
 
-months =["April"]#["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+months =["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 ce_strike = []
 pe_strike = []
@@ -59,7 +59,7 @@ def _update_trades(ceprice, peprice, bo):
     buy_sell.append(bo)
 
 
-for year in range(2014,2015):
+for year in range(2014,2021):
     for month in months:
         
         nifty = _nifty(year,month)
